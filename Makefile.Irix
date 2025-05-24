@@ -1,0 +1,259 @@
+#
+# QuakeWorld Makefile for IRIX 6.5 on SGI Octane
+# 
+
+# Compiler settings
+CC = gcc
+BASE_CFLAGS = -O2 -DIRIX -I/usr/include -DGLQUAKE
+RELEASE_CFLAGS = $(BASE_CFLAGS)
+DEBUG_CFLAGS = $(BASE_CFLAGS) -g
+
+# Choose between debug and release build
+CFLAGS = $(DEBUG_CFLAGS)
+#CFLAGS = $(RELEASE_CFLAGS)
+
+# Linker settings
+LDFLAGS = -L/usr/lib32 -lm -lX11 -lXext -lGL -laudio -ldmedia
+
+# Include directories
+INCLUDES = -I. -I./client -I./server -I/usr/include/X11
+
+# Common source files
+COMMON_OBJS = \
+	cmd.o common.o crc.o cvar.o mathlib.o md4.o zone.o pmove.o pmovetst.o \
+	net_chan.o
+
+# Client source files
+CLIENT_OBJS = \
+	cl_demo.o cl_input.o cl_main.o cl_parse.o cl_tent.o \
+	cl_cam.o cl_ents.o cl_pred.o skin.o \
+	menu.o sbar.o view.o keys.o console.o wad.o
+
+# Network files - since we already have net_chan.o in COMMON_OBJS, leave this empty
+NET_OBJS =
+
+# System-specific files
+SYS_OBJS = \
+	sys_irix.o gl_sgis.o gl_sgis_stub.o snd_irix.o snd_irix_stub.o net_udp.o cd_unix.o cd_unix_stub.o irix_compat.o
+
+# Sound system
+SND_OBJS = \
+	snd_dma.o snd_mem.o snd_mix.o
+
+# GL-specific files
+GL_OBJS = \
+	gl_draw.o gl_mesh.o gl_model.o gl_refrag.o gl_rlight.o \
+	gl_rmain.o gl_rmisc.o gl_rsurf.o gl_screen.o gl_warp.o \
+	r_part.o r_vars.o
+
+# Server source files
+SERVER_OBJS = \
+	pr_cmds.o pr_edict.o pr_exec.o sv_init.o sv_main.o \
+	sv_move.o sv_phys.o sv_send.o sv_user.o world.o
+
+# Targets
+all: qwcl #qwsv
+
+# Build client with all necessary objects - remove duplicate net_chan.o
+qwcl: $(CLIENT_OBJS) $(COMMON_OBJS) $(SYS_OBJS) $(GL_OBJS) $(SND_OBJS)
+	$(CC) -o $@ $(CLIENT_OBJS) $(COMMON_OBJS) $(SYS_OBJS) $(GL_OBJS) $(SND_OBJS) -L/usr/lib32 -lm -lX11 -lXext -lGL -laudio -ldmedia
+
+# Build server
+qwsv: $(SERVER_OBJS) $(COMMON_OBJS) $(NET_OBJS)
+	$(CC) -o $@ $(SERVER_OBJS) $(COMMON_OBJS) $(NET_OBJS) $(LDFLAGS) -lm
+
+# Client files
+cl_demo.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_demo.c -o cl_demo.o
+
+cl_input.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_input.c -o cl_input.o
+
+cl_main.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_main.c -o cl_main.o
+
+cl_parse.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_parse.c -o cl_parse.o
+
+cl_tent.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_tent.c -o cl_tent.o
+
+cl_cam.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_cam.c -o cl_cam.o
+
+cl_ents.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_ents.c -o cl_ents.o
+
+cl_pred.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cl_pred.c -o cl_pred.o
+
+skin.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/skin.c -o skin.o
+
+menu.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/menu.c -o menu.o
+
+sbar.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/sbar.c -o sbar.o
+
+view.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/view.c -o view.o
+
+keys.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/keys.c -o keys.o
+
+console.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/console.c -o console.o
+
+wad.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/wad.c -o wad.o
+
+# Sound files
+snd_dma.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/snd_dma.c -o snd_dma.o
+
+snd_mem.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/snd_mem.c -o snd_mem.o
+
+snd_mix.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/snd_mix.c -o snd_mix.o
+
+# Network files
+net_chan.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/net_chan.c -o net_chan.o
+
+net_msg.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/net_msg.c -o net_msg.o
+
+# Physics files
+pmove.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/pmove.c -o pmove.o
+
+pmovetst.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/pmovetst.c -o pmovetst.o
+
+# Common files
+cmd.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cmd.c -o cmd.o
+
+common.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/common.c -o common.o
+
+crc.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/crc.c -o crc.o
+
+cvar.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cvar.c -o cvar.o
+
+mathlib.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/mathlib.c -o mathlib.o
+
+md4.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/md4.c -o md4.o
+
+zone.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/zone.c -o zone.o
+
+# System files
+sys_irix.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/sys_irix.c -o sys_irix.o
+
+gl_sgis.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_sgis.c -o gl_sgis.o
+
+snd_irix.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/snd_irix.c -o snd_irix.o
+
+net_udp.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/net_udp.c -o net_udp.o
+
+cd_unix.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cd_unix.c -o cd_unix.o
+
+# GL files
+gl_draw.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_draw.c -o gl_draw.o
+
+gl_mesh.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_mesh.c -o gl_mesh.o
+
+gl_model.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_model.c -o gl_model.o
+
+gl_refrag.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_refrag.c -o gl_refrag.o
+
+gl_rlight.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_rlight.c -o gl_rlight.o
+
+gl_rmain.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_rmain.c -o gl_rmain.o
+
+gl_rmisc.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_rmisc.c -o gl_rmisc.o
+
+gl_rsurf.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_rsurf.c -o gl_rsurf.o
+
+gl_screen.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_screen.c -o gl_screen.o
+
+gl_warp.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_warp.c -o gl_warp.o
+
+# Particle files
+r_part.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/r_part.c -o r_part.o
+
+r_vars.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/r_vars.c -o r_vars.o
+
+# Server files
+pr_cmds.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/pr_cmds.c -o pr_cmds.o
+
+pr_edict.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/pr_edict.c -o pr_edict.o
+
+pr_exec.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/pr_exec.c -o pr_exec.o
+
+sv_init.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_init.c -o sv_init.o
+
+sv_main.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_main.c -o sv_main.o
+
+sv_move.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_move.c -o sv_move.o
+
+sv_phys.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_phys.c -o sv_phys.o
+
+sv_send.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_send.c -o sv_send.o
+
+sv_user.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/sv_user.c -o sv_user.o
+
+world.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c server/world.c -o world.o
+
+# IRIX compatibility stubs
+gl_sgis_stub.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_sgis_stub.c -o gl_sgis_stub.o
+
+snd_irix_stub.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/snd_irix_stub.c -o snd_irix_stub.o
+
+cd_unix_stub.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/cd_unix_stub.c -o cd_unix_stub.o
+
+irix_compat.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/irix_compat.c -o irix_compat.o
+
+# Clean target
+clean:
+	rm -f *.o qwcl qwsv
+
+.PHONY: all clean
