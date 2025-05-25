@@ -44,7 +44,7 @@ SND_OBJS = \
 GL_OBJS = \
 	gl_draw.o gl_mesh.o gl_model.o gl_refrag.o gl_rlight.o \
 	gl_rmain.o gl_rmisc.o gl_rsurf.o gl_screen.o gl_warp.o \
-	r_part.o r_vars.o
+	r_part.o r_vars.o gl_ngraph.o
 
 # Server source files
 SERVER_OBJS = \
@@ -200,6 +200,9 @@ gl_screen.o:
 
 gl_warp.o:
 	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_warp.c -o gl_warp.o
+
+gl_ngraph.o:
+	$(CC) $(CFLAGS) $(INCLUDES) -c client/gl_ngraph.c -o gl_ngraph.o
 
 # Particle files
 r_part.o:

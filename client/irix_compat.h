@@ -1,7 +1,7 @@
-/*
+/* /*
  * IRIX compatibility functions for Quake
  */
-
+/*
 #ifndef IRIX_COMPAT_H
 #define IRIX_COMPAT_H
 
@@ -26,4 +26,4 @@ void R_NetGraph(void)
     // Stub implementation
 }
 
-#endif // IRIX_COMPAT_H
+#endif // IRIX_COMPAT_H */

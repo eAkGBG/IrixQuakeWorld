@@ -43,10 +43,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 
-#ifdef IRIX
-#include "irix_compat.h"
-#endif
-
 #define WARP_WIDTH              320
 #define WARP_HEIGHT             200
 
@@ -562,7 +558,7 @@ void VID_Init8bitPalette(void)
     // SGI stöder EXT_shared_texture_palette
     if (strstr(gl_extensions, "GL_EXT_shared_texture_palette") != NULL) {
         Con_SafePrintf("8-bit GL extensions enabled.\n");
-        glEnable(GL_SHARED_TEXTURE_PALETTE_EXT);
+//        glEnable(GL_SHARED_TEXTURE_PALETTE_EXT); // Remove or comment out this line
         oldPalette = (char *)d_8to24table;
         newPalette = thePalette;
         for (i=0; i<256; i++) {
