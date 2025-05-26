@@ -1,0 +1,40 @@
+# Kompilerade objektfiler
+*.o
+*.obj
+
+# Kompilerade bibliotek (om några skapas lokalt och inte ska med)
+*.a
+*.so
+*.dylib
+*.lib
+
+# Körbara filer (om du inte vill ha dem i arkivet)
+qwcl
+qwsv
+# Lägg till andra körbara filer som genereras av din build
+
+# Core dump-filer
+core
+core.*
+
+# macOS specifika filer
+.DS_Store
+*.swp
+*~
+*.bak
+*.tmp
+
+# Byggkataloger (om du har en specifik katalog för byggartefakter)
+# build/
+# release/
+
+# Specifika filer du inte vill ha med
+# till_exempel_en_lokal_konfigurationsfil.cfg
+
+# Loggfiler
+*.log
+
+# Din filtrerade diff-fil (om du inte vill ha den i arkivet)
+irix_changes_filtered.diff
+gl_h_from_irix.txt
+glx_h_from_irix.txt
