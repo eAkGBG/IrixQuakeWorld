@@ -39,8 +39,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // OpenGL inkluderingar - SGI-specifika
 #include <GL/gl.h>
-#include <GL/glx.h>
-
+#include <GL/glx.h> // Viktig för glXGetProcAddress
 #include "quakedef.h"
 
 #define WARP_WIDTH              320
@@ -93,14 +92,14 @@ float		gldepthmin, gldepthmax;
 
 cvar_t	gl_ztrick = {"gl_ztrick","1"};
 
-const char *gl_vendor;
-const char *gl_renderer;
-const char *gl_version;
-const char *gl_extensions;
-
+// Dessa är korrekta definitioner för gl_sgis.c
 qboolean is8bit = false;
-qboolean isPermedia = false;
+qboolean isPermedia = false; // Om denna används specifikt i gl_sgis.c
 qboolean gl_mtexable = false;
+
+// Definitioner för multitexture-funktionspekarna (korrekt här)
+lpMTexCoord2fSGISFUNC qglMTexCoord2fSGIS = NULL;
+lpSelTexSGISFUNC qglSelectTextureSGIS = NULL;
 
 /*-----------------------------------------------------------------------*/
 void D_BeginDirectRect (int x, int y, byte *pbitmap, int width, int height)
@@ -485,19 +484,63 @@ GL_Init
 */
 void GL_Init (void)
 {
-    gl_vendor = glGetString (GL_VENDOR);
-    Con_Printf ("GL_VENDOR: %s\n", gl_vendor);
-    gl_renderer = glGetString (GL_RENDERER);
-    Con_Printf ("GL_RENDERER: %s\n", gl_renderer);
+    // These will use the global variables declared in glquake.h and defined in gl_rmain.c
+    // They are initialized to NULL in gl_rmain.c and will be populated here.
+    if (!gl_vendor) gl_vendor = (const char *)glGetString(GL_VENDOR);
+    if (!gl_renderer) gl_renderer = (const char *)glGetString(GL_RENDERER);
+    if (!gl_version) gl_version = (const char *)glGetString(GL_VERSION);
+    if (!gl_extensions) gl_extensions = (const char *)glGetString(GL_EXTENSIONS);
 
-    gl_version = glGetString (GL_VERSION);
-    Con_Printf ("GL_VERSION: %s\n", gl_version);
-    gl_extensions = glGetString (GL_EXTENSIONS);
-    Con_Printf ("GL_EXTENSIONS: %s\n", gl_extensions);
+    Con_Printf ("GL_VENDOR: %s\n", gl_vendor ? gl_vendor : "Unknown");
+    Con_Printf ("GL_RENDERER: %s\n", gl_renderer ? gl_renderer : "Unknown");
+    Con_Printf ("GL_VERSION: %s\n", gl_version ? gl_version : "Unknown");
+    Con_Printf ("GL_EXTENSIONS: %s\n", gl_extensions ? gl_extensions : "None");
 
-    // SGI-specifik OpenGL-funktionalitet
-    if (strstr(gl_vendor, "SGI") != NULL) {
+    if (gl_vendor && strstr(gl_vendor, "SGI") != NULL) {
         Con_Printf("Using SGI-specific optimizations\n");
+    }
+
+    // Initiera multitexture
+    gl_mtexable = false; 
+    qglSelectTextureSGIS = NULL;
+    qglMTexCoord2fSGIS = NULL;
+
+    if (gl_extensions && strstr(gl_extensions, "GL_SGIS_multitexture"))
+    {
+        Con_Printf("GL_SGIS_multitexture found in extension string.\n");
+
+        // On IRIX, SGI extensions are often directly linkable.
+        // glXGetProcAddress is not linking, so we attempt direct assignment.
+        // The function prototypes for glSelectTextureSGIS and glMultiTexCoord2fSGIS
+        // have been added to glquake.h.
+
+        qglSelectTextureSGIS = glSelectTextureSGIS;
+        // qglMTexCoord2fSGIS = glMTexCoord2fSGIS; // Original
+        qglMTexCoord2fSGIS = glMultiTexCoord2fSGIS; // Prova denna istället
+
+        // If the functions linked successfully, the pointers will be non-NULL.
+        // The linker would have failed if the symbols weren't found.
+        if (qglSelectTextureSGIS && qglMTexCoord2fSGIS) 
+        {
+            gl_mtexable = true;
+            Con_Printf("SGIS multitexture functions assigned via direct linking.\n");
+        }
+        else
+        {
+            // This case is unlikely if direct linking is the method, as unresolved symbols
+            // would typically cause a linker error.
+            Con_Printf("ERROR: GL_SGIS_multitexture reported, but direct assignment of function pointers failed (resulted in NULL).\n");
+            Con_Printf("Check linker output for unresolved symbols: glSelectTextureSGIS, glMultiTexCoord2fSGIS.\n");
+            if (!qglSelectTextureSGIS) Con_Printf(" - glSelectTextureSGIS is NULL after assignment.\n");
+            if (!qglMTexCoord2fSGIS) Con_Printf(" - qglMTexCoord2fSGIS (tried as glMultiTexCoord2fSGIS) is NULL after assignment.\n");
+            qglSelectTextureSGIS = NULL; // Ensure they are NULL
+            qglMTexCoord2fSGIS = NULL;
+            gl_mtexable = false;
+        }
+    }
+    else
+    {
+        Con_Printf("GL_SGIS_multitexture not found in extension string. Multitexture disabled.\n");
     }
 
     glClearColor (1,0,0,0);
@@ -550,25 +593,34 @@ qboolean VID_Is8bit(void)
 // SGI-specifik 8-bitarsfunktion
 void VID_Init8bitPalette(void) 
 {
-    // Kontrollera om SGI-specifika texturtabellstillägg finns
-    int i;
-    char thePalette[256*3];
-    char *oldPalette, *newPalette;
+    // char thePalette[256*3]; // Behövs inte om vi inte förbereder data för glColorTableEXT
+    // int i; // Behövs inte heller i så fall
 
-    // SGI stöder EXT_shared_texture_palette
-    if (strstr(gl_extensions, "GL_EXT_shared_texture_palette") != NULL) {
-        Con_SafePrintf("8-bit GL extensions enabled.\n");
-//        glEnable(GL_SHARED_TEXTURE_PALETTE_EXT); // Remove or comment out this line
-        oldPalette = (char *)d_8to24table;
-        newPalette = thePalette;
-        for (i=0; i<256; i++) {
-            *newPalette++ = *oldPalette++;
-            *newPalette++ = *oldPalette++;
-            *newPalette++ = *oldPalette++;
-            oldPalette++;
-        }
-        glColorTableEXT(GL_SHARED_TEXTURE_PALETTE_EXT, GL_RGB, 256, GL_RGB, GL_UNSIGNED_BYTE, (void *)thePalette);
-        is8bit = true;
+    // Sätt is8bit till false som standard.
+    // Om GL_EXT_shared_texture_palette finns men vi inte kan/vill använda glColorTableEXT på IRIX,
+    // så förblir is8bit false.
+    is8bit = false;
+
+    if (gl_extensions && strstr(gl_extensions, "GL_EXT_shared_texture_palette") != NULL) {
+        Con_SafePrintf("8-bit GL extensions enabled (GL_EXT_shared_texture_palette found).\n");
+
+        // Eftersom vi är i gl_sgis.c (IRIX-specifik kod) och vi har konstaterat
+        // att glColorTableEXT antingen inte är tillgänglig via länkning mot systemets GL
+        // eller inte är önskvärd att använda, så anropar vi den inte här.
+        // Konsekvensen är att det specifika 8-bitarsläget som denna extension
+        // möjliggör inte kommer att användas.
+        // Con_Printf(PRINT_DEVELOPER, "IRIX: GL_EXT_shared_texture_palette reported, but glColorTableEXT will not be called from gl_sgis.c.\n");
+        // Con_Printf(PRINT_DEVELOPER, "IRIX: is8bit remains false.\n");
+        fprintf(stderr, "DEBUG IRIX: GL_EXT_shared_texture_palette reported, but glColorTableEXT will not be called from gl_sgis.c.\n");
+        fprintf(stderr, "DEBUG IRIX: is8bit remains false.\n");
+        
+        // is8bit är redan false och förblir false.
+        // Ingen anledning att ha #ifdef IRIX här eftersom hela denna fil är IRIX-specifik.
+        // Den tidigare #else-grenen (is8bit = true;) skulle inte heller nås.
+
+    } else {
+        Con_SafePrintf("GL_EXT_shared_texture_palette not found. 8-bit GL extensions disabled.\n");
+        // is8bit är redan false och förblir false.
     }
 }
 
@@ -805,3 +857,43 @@ void IN_Move (usercmd_t *cmd)
 
 void VID_LockBuffer (void) {}
 void VID_UnlockBuffer (void) {}
+
+/*
+void Your_OpenGL_Extension_And_Init_Function(void) // Ge funktionen ett passande namn
+{
+    // ... (annan GL-initieringskod) ...
+
+    const char *extensions = (const char *)glGetString(GL_EXTENSIONS);
+    gl_mtexable = false; // Börja med att anta att det inte finns
+
+    if (extensions && strstr(extensions, "GL_SGIS_multitexture"))
+    {
+        // För IRIX och GL_SGIS_multitexture är funktionerna oftast direkt tillgängliga
+        // om systemets GL-bibliotek och headers stöder extensionen.
+        // Inget behov av glXGetProcAddress eller liknande för SGI-specifika extensions.
+        qglSelectTextureSGIS = glSelectTextureSGIS;
+        qglMTexCoord2fSGIS = glMTexCoord2fSGIS; // Kontrollera det exakta namnet på denna funktion i IRIX GL-headers
+
+        if (qglSelectTextureSGIS && qglMTexCoord2fSGIS)
+        {
+            gl_mtexable = true;
+            Con_Printf("Using GL_SGIS_multitexture.\n");
+        }
+        else
+        {
+            Con_Printf("GL_SGIS_multitexture reported, but function pointers are NULL. Multitexture disabled.\n");
+            // Säkerställ att de är NULL om de inte kunde sättas (även om det är osannolikt om extensionen finns)
+            qglSelectTextureSGIS = NULL;
+            qglMTexCoord2fSGIS = NULL;
+        }
+    }
+    else
+    {
+        Con_Printf("GL_SGIS_multitexture not found. Multitexture disabled.\n");
+        qglSelectTextureSGIS = NULL;
+        qglMTexCoord2fSGIS = NULL;
+    }
+
+    // ... (initiera andra extensions och GL-tillstånd) ...
+}
+*/

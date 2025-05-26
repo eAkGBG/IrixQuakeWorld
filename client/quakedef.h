@@ -36,6 +36,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <setjmp.h>
 #include <time.h>
 
+#ifndef _WIN32
+#include <strings.h> // For strcasecmp and strncasecmp
+#define stricmp strcasecmp
+#define strnicmp strncasecmp // Kan vara bra att lägga till denna också ifall den används
+#endif
+
 #include "bothdefs.h"
 
 #include "common.h"

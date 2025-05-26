@@ -20,7 +20,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_main.c  -- client main loop
 
 #include "quakedef.h"
+#ifdef _WIN32
 #include "winquake.h"
+#endif
+
 #ifdef _WIN32
 #include "winsock.h"
 #else
@@ -1402,7 +1405,7 @@ void Host_FixupModelNames(void)
 {
 	simple_crypt(emodel_name, sizeof(emodel_name) - 1);
 	simple_crypt(pmodel_name, sizeof(pmodel_name) - 1);
-	simple_crypt(prespawn_name,  sizeof(prespawn_name)  - 1);
+	simple_crypt(prespawn_name, 	sizeof(prespawn_name)  - 1);
 	simple_crypt(modellist_name, sizeof(modellist_name) - 1);
 	simple_crypt(soundlist_name, sizeof(soundlist_name) - 1);
 }
@@ -1416,27 +1419,32 @@ Host_Init
 */
 void Host_Init (quakeparms_t *parms)
 {
-	COM_InitArgv (parms->argc, parms->argv);
-	COM_AddParm ("-game");
-	COM_AddParm ("qw");
+    COM_InitArgv (parms->argc, parms->argv);
+    COM_AddParm ("-game");                   // These will use com_argc/com_argv set by the first COM_InitArgv
+    COM_AddParm ("qw");
 
-	Sys_mkdir("qw");
-
+    Sys_mkdir("qw"); // Attempt to create the "qw" directory in the current working directory
+	
 	if (COM_CheckParm ("-minmemory"))
 		parms->memsize = MINIMUM_MEMORY;
 
-	host_parms = *parms;
+    host_parms = *parms;
+    Sys_Printf("DEBUG cl_main.c: After host_parms = *parms, host_parms.basedir is [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
 
-	if (parms->memsize < MINIMUM_MEMORY)
+    if (parms->memsize < MINIMUM_MEMORY)
 		Sys_Error ("Only %4.1f megs of memory reported, can't execute game", parms->memsize / (float)0x100000);
 
 	Memory_Init (parms->membase, parms->memsize);
+	Sys_Printf("DEBUG cl_main.c: After Memory_Init, host_parms.basedir is [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
 	Cbuf_Init ();
+	Sys_Printf("DEBUG cl_main.c: After Cbuf_Init, host_parms.basedir is [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
 	Cmd_Init ();
+	Sys_Printf("DEBUG cl_main.c: After Cmd_Init, host_parms.basedir is [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
 	V_Init ();
-
-	COM_Init ();
-
+	Sys_Printf("DEBUG cl_main.c: After V_Init, host_parms.basedir is [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
+	
+	COM_Init ();                             // This will call COM_InitFilesystem, etc
+	
 	Host_FixupModelNames();
 	
 	NET_Init (PORT_CLIENT);
@@ -1477,7 +1485,7 @@ void Host_Init (quakeparms_t *parms)
 	Draw_Init ();
 	SCR_Init ();
 	R_Init ();
-//	S_Init ();		// S_Init is now done as part of VID. Sigh.
+//	S_Init ();		// S_Init is now done as part of VID. Sigh;
 #ifdef GLQUAKE
 	S_Init();
 #endif
@@ -1500,7 +1508,7 @@ void Host_Init (quakeparms_t *parms)
 
 	Con_Printf ("\nClient Version %4.2f (Build %04d)\n\n", VERSION, build_number());
 
-	Con_Printf ("€ QuakeWorld Initialized ‚\n");	
+	Con_Printf ("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ QuakeWorld Initialized ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½\n");	
 }
 
 

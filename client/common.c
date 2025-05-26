@@ -1726,6 +1726,8 @@ void COM_AddGameDirectory (char *dir)
 //
 	search = Hunk_Alloc (sizeof(searchpath_t));
 	strcpy (search->filename, dir);
+    // DEBUG: Print search->filename immediately after strcpy
+    Sys_Printf("DEBUG: COM_AddGameDirectory: search->filename for dir [%s] is now [%s]\n", dir, search->filename);
 	search->next = com_searchpaths;
 	com_searchpaths = search;
 
@@ -1834,17 +1836,27 @@ void COM_InitFilesystem (void)
 // -basedir <path>
 // Overrides the system supplied base directory (under id1)
 //
+	// DEBUG: Print host_parms.basedir
+    Sys_Printf("DEBUG: host_parms.basedir before strcpy: [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
+
 	i = COM_CheckParm ("-basedir");
 	if (i && i < com_argc-1)
 		strcpy (com_basedir, com_argv[i+1]);
 	else
 		strcpy (com_basedir, host_parms.basedir);
+	
+	// DEBUG: Print com_basedir after strcpy
+    Sys_Printf("DEBUG: com_basedir after strcpy: [%s]\n", com_basedir);
 
 //
 // start up with id1 by default
 //
 	COM_AddGameDirectory (va("%s/id1", com_basedir) );
-	COM_AddGameDirectory (va("%s/qw", com_basedir) );
+	//COM_AddGameDirectory (va("%s/qw", com_basedir) );
+	// DEBUG: Print result of va() for qw
+    char* temp_qw_path = va("%s/qw", com_basedir);
+    Sys_Printf("DEBUG: Path for qw from va(): [%s]\n", temp_qw_path ? temp_qw_path : "NULL");
+    COM_AddGameDirectory (temp_qw_path);
 
 	// any set gamedirs will be freed up to here
 	com_base_searchpaths = com_searchpaths;

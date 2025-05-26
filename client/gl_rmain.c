@@ -59,6 +59,12 @@ vec3_t	r_origin;
 float	r_world_matrix[16];
 float	r_base_world_matrix[16];
 
+// Definiera och initialisera dessa globala variabler
+const char *gl_vendor = NULL;
+const char *gl_renderer = NULL;
+const char *gl_version = NULL;
+const char *gl_extensions = NULL;
+
 //
 // screen size info
 //

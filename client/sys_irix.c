@@ -323,6 +323,10 @@ int main (int c, char **v)
     if (j)
         parms.memsize = (int) (Q_atof(com_argv[j+1]) * 1024 * 1024);
     parms.membase = malloc (parms.memsize);
+    if (parms.membase == NULL) {
+        fprintf(stderr, "FATAL ERROR: Failed to malloc %d bytes for membase.\n", parms.memsize);
+        exit(1);
+    }
 
     parms.basedir = basedir;
 // caching is disabled by default, use -cachedir to enable

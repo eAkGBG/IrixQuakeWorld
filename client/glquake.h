@@ -27,9 +27,23 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <windows.h>
 #endif
 
+// Definiera extensionen INNAN <GL/gl.h> inkluderas
+// Detta kan få IRIX <GL/gl.h> att exponera funktionerna om de är skyddade av detta makro.
+#ifndef GL_SGIS_multitexture
+#define GL_SGIS_multitexture 1
+#endif
+
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include "fix_gl.h"
+
+// Definiera APIENTRY och CALLBACK om de inte redan är definierade (t.ex. på icke-Windows)
+// För IRIX är de vanligtvis inte fördefinierade i system-headers på samma sätt som Windows.
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+#ifndef CALLBACK
+#define CALLBACK
+#endif
 
 // Comment out the glext.h include and add needed definitions
 //#include <GL/glext.h> 
@@ -52,9 +66,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 // If these types are not defined in your GL headers, define them:
-#ifndef APIENTRY
-#define APIENTRY
-#endif
+// APIENTRY och CALLBACK är nu definierade ovanför
 
 #ifndef APIENTRYP
 #define APIENTRYP APIENTRY *
@@ -78,6 +90,12 @@ extern	int texture_extension_number;
 extern	int		texture_mode;
 
 extern	float	gldepthmin, gldepthmax;
+
+// Declare GL info strings as extern here
+extern	const char *gl_vendor;
+extern	const char *gl_renderer;
+extern	const char *gl_version;
+extern	const char *gl_extensions;
 
 void GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, qboolean alpha);
 void GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean alpha);
@@ -262,12 +280,23 @@ void GL_Bind (int texnum);
 #define    TEXTURE0_SGIS				0x835E
 #define    TEXTURE1_SGIS				0x835F
 
-#ifdef _WIN32
-typedef void (APIENTRY *lpMTexFUNC) (GLenum, GLfloat, GLfloat);
-typedef void (APIENTRY *lpSelTexFUNC) (GLenum);
-extern lpMTexFUNC qglMTexCoord2fSGIS;
-extern lpSelTexFUNC qglSelectTextureSGIS;
+// If GL_SGIS_multitexture is defined, IRIX GL headers might not declare these,
+// so we declare them here to allow direct linking.
+#ifdef GL_SGIS_multitexture
+#ifndef APIENTRY // Ensure APIENTRY is defined
+#define APIENTRY
 #endif
+extern void APIENTRY glSelectTextureSGIS(GLenum target);
+// extern void APIENTRY glMTexCoord2fSGIS(GLenum target, GLfloat s, GLfloat t); // Original
+extern void APIENTRY glMultiTexCoord2fSGIS(GLenum target, GLfloat s, GLfloat t); // Prova denna istället
+#endif
+
+// Gör dessa globala, inte bara för _WIN32
+typedef void (APIENTRY *lpMTexCoord2fSGISFUNC) (GLenum target, GLfloat s, GLfloat t); // Byt namn för tydlighet
+typedef void (APIENTRY *lpSelTexSGISFUNC) (GLenum target); // Byt namn för tydlighet
+
+extern lpMTexCoord2fSGISFUNC qglMTexCoord2fSGIS;
+extern lpSelTexSGISFUNC qglSelectTextureSGIS;
 
 extern qboolean gl_mtexable;
 
