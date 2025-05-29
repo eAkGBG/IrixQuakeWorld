@@ -3,20 +3,20 @@
 # 
 
 # Compiler settings
-CC = gcc
-BASE_CFLAGS = -O2 -DIRIX -I/usr/include -DGLQUAKE
-RELEASE_CFLAGS = $(BASE_CFLAGS)
-DEBUG_CFLAGS = $(BASE_CFLAGS) -g
+CC = c89
+BASE_CFLAGS = -DIRIX -I/usr/include -DGLQUAKE
+RELEASE_CFLAGS = $(BASE_CFLAGS) -O2
+DEBUG_CFLAGS = $(BASE_CFLAGS) -g3
 
 # Choose between debug and release build
-CFLAGS = $(DEBUG_CFLAGS)
-#CFLAGS = $(RELEASE_CFLAGS)
+CFLAGS = $(RELEASE_CFLAGS)
+#CFLAGS = $(DEBUG_CFLAGS)
 
 # Linker settings
 LDFLAGS = -L/usr/lib32 -lm -lX11 -lXext -lGL -laudio -ldmedia
 
-# Include directories
-INCLUDES = -I. -I./client -I./server -I/usr/include/X11
+# Include directories  
+INCLUDES = -I. -I./client -I./server -I/usr/include/X11 -I/usr/include/GL
 
 # Common source files
 COMMON_OBJS = \

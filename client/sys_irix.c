@@ -43,7 +43,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 int noconinput = 0;
 int nostdout = 0;
 
-char *basedir = ".";
+static char basedir_buf[256] = ".";
+char *basedir = basedir_buf;
 char *cachedir = "/tmp";
 
 cvar_t  sys_linerefresh = {"sys_linerefresh","0"};// set for entity display
@@ -59,24 +60,30 @@ void Sys_DebugNumber(int y, int val)
 void Sys_Printf (char *fmt, ...)
 {
     va_list		argptr;
-    char		text[2048];
-    unsigned char		*p;
+    char		text[2048]; 
+    int chars_written;
+
+    // if (nostdout) // Kommentera bort eller ta bort denna rad helt under testning med stderr
+    //     return;
 
     va_start (argptr,fmt);
-    vsprintf (text,fmt,argptr);
+    chars_written = vsnprintf(text, sizeof(text), fmt, argptr);
     va_end (argptr);
 
-    if (strlen(text) > sizeof(text))
-        Sys_Error("memory overwrite in Sys_Printf");
-
-    if (nostdout)
+    if (chars_written < 0) {
+        // Försök skriva ett felmeddelande direkt till stderr om vsnprintf misslyckas
+        // Inkludera originalformatsträngen för att identifiera vilken Sys_Printf som fallerade
+        fprintf(stderr, "Sys_Printf: vsnprintf encoding error for format: %s\n", fmt);
         return;
+    }
+    // Om texten trunkerades kan du välja att indikera det, men det är valfritt.
+    // if (chars_written >= (int)sizeof(text)) { // Jämför med int cast för att undvika varning
+    //     fprintf(stderr, "Sys_Printf: output truncated for format: %s\n", fmt);
+    // }
 
-    for (p = (unsigned char *)text; *p; p++)
-        if ((*p > 128 || *p < 32) && *p != 10 && *p != 13 && *p != 9)
-            printf("[%02x]", *p);
-        else
-            putc(*p, stdout);
+    // Ändra till stderr för testning
+    fputs(text, stderr); 
+    fflush(stderr);      
 }
 
 void Sys_Quit (void)
@@ -103,13 +110,12 @@ void Sys_Error (char *error, ...)
     fcntl (0, F_SETFL, fcntl (0, F_GETFL, 0) & ~FNDELAY);
     
     va_start (argptr,error);
-    vsprintf (string,error,argptr);
+    vsnprintf (string, sizeof(string), error,argptr); // Använd vsnprintf
     va_end (argptr);
     fprintf(stderr, "Error: %s\n", string);
 
     Host_Shutdown ();
     exit (1);
-
 } 
 
 void Sys_Warn (char *warning, ...)
@@ -118,9 +124,9 @@ void Sys_Warn (char *warning, ...)
     char        string[1024];
     
     va_start (argptr,warning);
-    vsprintf (string,warning,argptr);
+    vsnprintf (string, sizeof(string), warning,argptr); // Använd vsnprintf
     va_end (argptr);
-    fprintf(stderr, "Warning: %s", string);
+    fprintf(stderr, "Warning: %s", string); // Originalet saknade \n, behåll det om det är avsiktligt
 } 
 
 /*
@@ -160,7 +166,7 @@ int Sys_FileOpenRead (char *path, int *handle)
     if (fstat (h,&fileinfo) == -1)
         Sys_Error ("Error fstating %s", path);
 
-    return fileinfo.st_size;
+    return (int)fileinfo.st_size;
 }
 
 int Sys_FileOpenWrite (char *path)
@@ -200,15 +206,18 @@ int Sys_FileRead (int handle, void *dest, int count)
 void Sys_DebugLog(char *file, char *fmt, ...)
 {
     va_list argptr; 
-    static char data[1024];
+    static char data[1024]; // static buffer är ok här då den bara används av denna funktion
     int fd;
     
     va_start(argptr, fmt);
-    vsprintf(data, fmt, argptr);
+    vsnprintf(data, sizeof(data), fmt, argptr); // Använd vsnprintf
     va_end(argptr);
     fd = open(file, O_WRONLY | O_CREAT | O_APPEND, 0666);
-    write(fd, data, strlen(data));
-    close(fd);
+    if (fd != -1) // Kontrollera om open lyckades
+    {
+        write(fd, data, strlen(data));
+        close(fd);
+    }
 }
 
 void Sys_EditFile(char *filename)
@@ -308,12 +317,11 @@ int main (int c, char **v)
     int j;
 
     // IRIX might need special FPU handling
-    // For now, just ignore FP exceptions which is safer
     signal(SIGFPE, SIG_IGN);
 
     memset(&parms, 0, sizeof(parms));
-
     COM_InitArgv(c, v);
+
     parms.argc = com_argc;
     parms.argv = com_argv;
 
@@ -322,25 +330,34 @@ int main (int c, char **v)
     j = COM_CheckParm("-mem");
     if (j)
         parms.memsize = (int) (Q_atof(com_argv[j+1]) * 1024 * 1024);
+    
     parms.membase = malloc (parms.memsize);
+
     if (parms.membase == NULL) {
-        fprintf(stderr, "FATAL ERROR: Failed to malloc %d bytes for membase.\n", parms.memsize);
+        fprintf(stderr, "FATAL ERROR: Failed to malloc %d bytes for membase at %s:%d.\n", parms.memsize, __FILE__, __LINE__);
         exit(1);
     }
 
-    parms.basedir = basedir;
-// caching is disabled by default, use -cachedir to enable
-//	parms.cachedir = cachedir;
+    // Set up basedir
+    strncpy(basedir_buf, ".", sizeof(basedir_buf)-1);
+    basedir_buf[sizeof(basedir_buf)-1] = '\0';
+    parms.basedir = basedir_buf;
 
-    noconinput = COM_CheckParm("-noconinput");
-    if (!noconinput)
+    // Check for -noconinput parameter
+    if (COM_CheckParm("-noconinput"))
+    {
+        noconinput = 1;
+    }
+    else
+    {
         fcntl(0, F_SETFL, fcntl (0, F_GETFL, 0) | FNDELAY);
+    }
 
+    // Check for -nostdout parameter
     if (COM_CheckParm("-nostdout"))
+    {
         nostdout = 1;
-
-    Sys_Init();
-
+    }
     Host_Init(&parms);
 
     oldtime = Sys_DoubleTime ();
@@ -368,8 +385,6 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 
     addr = (startaddr & ~(psize-1)) - psize;
 
-    r = mprotect((char*)addr, length + startaddr - addr + psize, PROT_READ | PROT_WRITE | PROT_EXEC);
-
-    if (r < 0)
+    r = mprotect((char*)addr, length + startaddr - addr + psize, PROT_READ | PROT_WRITE | PROT_EXEC);        if (r < 0)
             Sys_Error("Protection change failed\n");
 }

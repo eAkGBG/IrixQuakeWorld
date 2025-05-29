@@ -17,11 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-// disable data conversion warnings
-
-#pragma warning(disable : 4244)     // MIPS
-#pragma warning(disable : 4136)     // X86
-#pragma warning(disable : 4051)     // ALPHA
+// Note: Microsoft Visual C++ pragma warnings removed for IRIX compatibility
   
 #ifdef _WIN32
 #include <windows.h>
@@ -33,8 +29,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GL_SGIS_multitexture 1
 #endif
 
+#ifdef IRIX
+#include <gl.h>
+#include <glu.h>
+#else
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
 
 // Definiera APIENTRY och CALLBACK om de inte redan är definierade (t.ex. på icke-Windows)
 // För IRIX är de vanligtvis inte fördefinierade i system-headers på samma sätt som Windows.

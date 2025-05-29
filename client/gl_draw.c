@@ -386,8 +386,8 @@ void Draw_Init (void)
 	int		x;
 	char	ver[40];
 	glpic_t	*gl;
-	int start;
-	byte    *ncdata;
+	int		start;
+	byte	*ncdata;
 
 	Cvar_RegisterVariable (&gl_nobind);
 	Cvar_RegisterVariable (&gl_max_size);
@@ -1179,8 +1179,9 @@ void GL_Upload8_EXT (byte *data, int width, int height,  qboolean mipmap, qboole
 	int			i, s;
 	qboolean	noalpha;
 	int			samples;
-    static	unsigned char scaled[1024*512];	// [512*256];
+	static		unsigned char scaled[1024*512];	// [512*256];
 	int			scaled_width, scaled_height;
+	int			miplevel;
 
 	s = width*height;
 	// if there are no transparent pixels, make it a 3 component
@@ -1232,8 +1233,6 @@ void GL_Upload8_EXT (byte *data, int width, int height,  qboolean mipmap, qboole
 	glTexImage2D (GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT, scaled_width, scaled_height, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, scaled);
 	if (mipmap)
 	{
-		int		miplevel;
-
 		miplevel = 0;
 		while (scaled_width > 1 || scaled_height > 1)
 		{

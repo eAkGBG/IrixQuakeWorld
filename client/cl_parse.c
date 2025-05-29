@@ -1096,9 +1096,9 @@ CL_ParseServerMessage
 int	received_framecount;
 void CL_ParseServerMessage (void)
 {
+    int i, j;
 	int			cmd;
 	char		*s;
-	int			i, j;
 
 	received_framecount = host_framecount;
 	cl.last_servermessage = realtime;

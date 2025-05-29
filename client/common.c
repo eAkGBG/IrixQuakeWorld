@@ -44,7 +44,7 @@ qboolean	com_modified;	// set true if using non-id files
 
 int		static_registered = 1;	// only for startup check, then set
 
-qboolean		msg_suppress_1 = 0;
+qboolean		msg_suppress_1 = false;
 
 void COM_InitFilesystem (void);
 void COM_Path_f (void);
@@ -133,7 +133,8 @@ void InsertLinkAfter (link_t *l, link_t *after)
 ============================================================================
 */
 
-#if 0
+/* //Hallå detta vill vi inte ha ????
+//Buggiga funktioner börjar här.
 void Q_memset (void *dest, int fill, int count)
 {
 	int		i;
@@ -288,7 +289,7 @@ int Q_strcasecmp (char *s1, char *s2)
 	return Q_strncasecmp (s1, s2, 99999);
 }
 
-#endif
+//Buggiga funktioner slutar här. */
 
 int Q_atoi (char *str)
 {
@@ -1186,7 +1187,14 @@ Adds the given string at the end of the current argument list
 */
 void COM_AddParm (char *parm)
 {
-	largv[com_argc++] = parm;
+    if (com_argc >= MAX_NUM_ARGVS + NUM_SAFE_ARGVS) // Kontrollera mot den totala storleken
+    {
+        // Sys_Error eller Con_Printf för att indikera felet.
+        // Att bara ignorera kan dölja problem, men är säkrare än att skriva utanför gränserna.
+        Con_Printf("Warning: COM_AddParm: Too many arguments, cannot add %s\n", parm);
+        return;
+    }
+    largv[com_argc++] = parm;
 }
 
 
@@ -1235,19 +1243,23 @@ va
 
 does a varargs printf into a temp buffer, so I don't need to have
 varargs versions of all text functions.
-FIXME: make this buffer size safe someday
+Uses rotating buffers to avoid issues with multiple va() calls
 ============
 */
 char	*va(char *format, ...)
 {
-	va_list		argptr;
-	static char		string[1024];
-	
-	va_start (argptr, format);
-	vsprintf (string, format,argptr);
-	va_end (argptr);
+    va_list		argptr;
+    static char	string[4][1024]; // 4 rotating buffers
+    static int	buffer_index = 0;
+    
+    buffer_index = (buffer_index + 1) % 4; // Rotate to next buffer
+    
+    va_start (argptr, format);
+    vsnprintf (string[buffer_index], sizeof(string[buffer_index]), format, argptr);
+    string[buffer_index][sizeof(string[buffer_index])-1] = '\0'; // Ensure null termination
+    va_end (argptr);
 
-	return string;	
+    return string[buffer_index];	
 }
 
 
@@ -1480,24 +1492,59 @@ int COM_FOpenFile (char *filename, FILE **file)
 	pack_t		*pak;
 	int			i;
 	int			findtime;
-
+	
 	file_from_pak = 0;
+
+	// Input validation
+	if (!filename || !file) {
+		if (file) *file = NULL;
+		com_filesize = -1;
+		return -1;
+	}
+	
+	// Check filename length
+	if (strlen(filename) >= MAX_QPATH) {
+		*file = NULL;
+		com_filesize = -1;
+		return -1;
+	}
 		
 //
 // search through the path, one element at a time
 //
 	for (search = com_searchpaths ; search ; search = search->next)
 	{
-	// is the element a pak file?
+		// Validate search path structure
+		if (!search) {
+			break;
+		}
+		// is the element a pak file?
 		if (search->pack)
 		{
-		// look through all the pak file elements
 			pak = search->pack;
+			
+			// Validate pak structure
+			if (!pak) {
+				Con_Printf ("ERROR: NULL pak in search path\n");
+				continue;
+			}
+			
+			if (!pak->files) {
+				Con_Printf ("ERROR: NULL pak->files for pak '%s'\n", 
+					pak->filename ? pak->filename : "unknown");
+				continue;
+			}
+			
+			if (pak->numfiles <= 0 || pak->numfiles > MAX_FILES_IN_PACK) {
+				Con_Printf ("ERROR: Invalid pak->numfiles=%d for pak '%s'\n", 
+					pak->numfiles, pak->filename ? pak->filename : "unknown");
+				continue;
+			}
+			
 			for (i=0 ; i<pak->numfiles ; i++)
+			{
 				if (!strcmp (pak->files[i].name, filename))
 				{	// found it!
-					Sys_Printf ("PackFile: %s : %s\n",pak->filename, filename);
-				// open a new file on the pakfile
 					*file = fopen (pak->filename, "rb");
 					if (!*file)
 						Sys_Error ("Couldn't reopen %s", pak->filename);	
@@ -1506,14 +1553,20 @@ int COM_FOpenFile (char *filename, FILE **file)
 					file_from_pak = 1;
 					return com_filesize;
 				}
+			}
 		}
 		else
 		{		
-	// check a file in the directory tree
+		// check a file in the directory tree
 			if (!static_registered)
 			{	// if not a registered version, don't ever go beyond base
 				if ( strchr (filename, '/') || strchr (filename,'\\'))
 					continue;
+			}
+			
+			// Validate search filename
+			if (!search->filename[0]) {
+				continue;
 			}
 			
 			sprintf (netpath, "%s/%s",search->filename, filename);
@@ -1521,16 +1574,15 @@ int COM_FOpenFile (char *filename, FILE **file)
 			findtime = Sys_FileTime (netpath);
 			if (findtime == -1)
 				continue;
-				
-			Sys_Printf ("FindFile: %s\n",netpath);
 
 			*file = fopen (netpath, "rb");
+			if (!*file) {
+				continue;
+			}
 			return COM_filelength (*file);
 		}
 		
 	}
-	
-	Sys_Printf ("FindFile: can't find %s\n", filename);
 	
 	*file = NULL;
 	com_filesize = -1;
@@ -1545,7 +1597,7 @@ Filename are reletive to the quake directory.
 Allways appends a 0 byte to the loaded data.
 ============
 */
-cache_user_t *loadcache;
+static cache_user_t *loadcache;
 byte	*loadbuf;
 int		loadsize;
 byte *COM_LoadFile (char *path, int usehunk)
@@ -1639,14 +1691,17 @@ of the list so they override previous pack files.
 */
 pack_t *COM_LoadPackFile (char *packfile)
 {
-	dpackheader_t	header;
-	int				i;
-	packfile_t		*newfiles;
-	int				numpackfiles;
-	pack_t			*pack;
-	FILE			*packhandle;
-	dpackfile_t		info[MAX_FILES_IN_PACK];
-	unsigned short		crc;
+    dpackheader_t header;
+    int i;
+    packfile_t *newfiles;
+    int numpackfiles;
+    pack_t *pack;
+    FILE *packhandle;
+    dpackfile_t *info;
+    unsigned short crc;
+    char safe_name[56];
+    char test_filename[MAX_OSPATH];
+    int test_index;
 
 	if (COM_FileOpenRead (packfile, &packhandle) == -1)
 		return NULL;
@@ -1665,11 +1720,41 @@ pack_t *COM_LoadPackFile (char *packfile)
 
 	if (numpackfiles != PAK0_COUNT)
 		com_modified = true;	// not the original file
+	
+	// Dynamically allocate the info array instead of using large stack allocation
+	info = (dpackfile_t *)Z_Malloc (numpackfiles * sizeof(dpackfile_t));
+	if (!info) {
+		Con_Printf ("ERROR: Failed to allocate memory for %d pack file info\n", numpackfiles);
+		fclose(packhandle);
+		return NULL;
+	}
 
-	newfiles = Z_Malloc (numpackfiles * sizeof(packfile_t));
+	newfiles = Hunk_Alloc (numpackfiles * sizeof(packfile_t));
+	if (!newfiles) {
+		Con_Printf ("ERROR: Failed to allocate memory for %d packfiles\n", numpackfiles);
+		Z_Free(info);
+		fclose(packhandle);
+		return NULL;
+	}
+	
+	// Debug: Verify allocation
+	Con_Printf ("DEBUG: Allocated newfiles at %p for %d files (%d bytes)\n",
+		(void*)newfiles, numpackfiles, numpackfiles * sizeof(packfile_t));
 
 	fseek (packhandle, header.dirofs, SEEK_SET);
-	fread (&info, 1, header.dirlen, packhandle);
+	
+	// Clear info array before reading
+	memset(info, 0, numpackfiles * sizeof(dpackfile_t));
+	
+	if (fread (info, 1, header.dirlen, packhandle) != header.dirlen) {
+		Con_Printf ("ERROR: Failed to read pack directory from %s\n", packfile);
+		Z_Free(info);
+		fclose(packhandle);
+		return NULL;
+	}
+	
+	// Debug: Check raw directory data
+	Con_Printf ("DEBUG: Read %d bytes of directory data\n", header.dirlen);
 
 // crc the directory to check for modifications
 	crc = CRC_Block((byte *)info, header.dirlen);
@@ -1681,20 +1766,109 @@ pack_t *COM_LoadPackFile (char *packfile)
 		com_modified = true;
 
 // parse the directory
-	for (i=0 ; i<numpackfiles ; i++)
+    for (i=0 ; i<numpackfiles ; i++)
 	{
-		strcpy (newfiles[i].name, info[i].name);
+        // CRITICAL FIX: info[i].name is NOT null-terminated if exactly 56 chars!
+        // Vi måste manuellt null-terminera innan vi gör string-operationer
+        memcpy(safe_name, info[i].name, 56);
+        safe_name[56] = 0;  // Force null termination
+        
+        // Now safely copy to newfiles with proper bounds checking
+        strncpy (newfiles[i].name, safe_name, MAX_QPATH-1);
+        newfiles[i].name[MAX_QPATH-1] = 0;  // Double ensure null termination
+        
 		newfiles[i].filepos = LittleLong(info[i].filepos);
 		newfiles[i].filelen = LittleLong(info[i].filelen);
+		
+		// Debug: Check first few files for corruption and validate the fix
+		if (i < 5) {
+			Con_Printf ("DEBUG: File %d: safe_name='%s' final_name='%s' pos=%d len=%d\n", 
+				i, safe_name, newfiles[i].name, newfiles[i].filepos, newfiles[i].filelen);
+		}
+		
+		// Validate file data
+		if (newfiles[i].filepos < 0 || newfiles[i].filelen < 0) {
+			Con_Printf ("ERROR: Invalid file data for %s: pos=%d len=%d\n",
+				newfiles[i].name, newfiles[i].filepos, newfiles[i].filelen);
+		}
 	}
 
-	pack = Z_Malloc (sizeof (pack_t));
+	pack = Hunk_Alloc (sizeof (pack_t));
+	if (!pack) {
+		Con_Printf ("ERROR: Failed to allocate memory for pack structure\n");
+		Z_Free(info);
+		fclose(packhandle);
+		return NULL;
+	}
+	
+	// Clear the structure to ensure no garbage data
+	memset(pack, 0, sizeof(pack_t));
+	
 	strcpy (pack->filename, packfile);
 	pack->handle = packhandle;
 	pack->numfiles = numpackfiles;
 	pack->files = newfiles;
 	
+	// Verify the copy worked correctly
+	if (strcmp(pack->filename, packfile) != 0) {
+		Con_Printf ("ERROR: Filename copy failed! Expected '%s', got '%s'\n", 
+			packfile, pack->filename);
+	}
+	
+	// Verify all fields are set correctly
+	if (pack->handle != packhandle || pack->numfiles != numpackfiles || pack->files != newfiles) {
+		Con_Printf ("ERROR: Pack structure fields corrupted after assignment!\n");
+		Con_Printf ("  handle: expected %p, got %p\n", (void*)packhandle, (void*)pack->handle);
+		Con_Printf ("  numfiles: expected %d, got %d\n", numpackfiles, pack->numfiles);
+		Con_Printf ("  files: expected %p, got %p\n", (void*)newfiles, (void*)pack->files);
+	}
+	
+	// Debug: Verify pack structure integrity  
+	Con_Printf ("DEBUG: Created pack at %p, filename='%s', numfiles=%d, files=%p\n",
+		(void*)pack, pack->filename, pack->numfiles, (void*)pack->files);
+	
+	// Additional validation: try to read back what we just wrote
+	strncpy(test_filename, pack->filename, sizeof(test_filename)-1);
+	test_filename[sizeof(test_filename)-1] = 0;
+	
+	if (strcmp(test_filename, packfile) != 0) {
+		Con_Printf ("ERROR: Pack filename readback failed! Expected '%s', got '%s'\n",
+			packfile, test_filename);
+	}
+	
+	// Test if we can safely access pack->files
+	if (pack->files && pack->numfiles > 0) {
+		// Validate first file entry
+		if (pack->files[0].name[0] != 0) {
+			Con_Printf ("DEBUG: First file: name='%s' pos=%d len=%d\n",
+				pack->files[0].name, pack->files[0].filepos, pack->files[0].filelen);
+		} else {
+			Con_Printf ("ERROR: First file has empty name after pack creation!\n");
+		}
+		
+		// Verify pointer integrity
+		if (pack->files != newfiles) {
+			Con_Printf ("ERROR: pack->files pointer was corrupted! Expected %p, got %p\n",
+				(void*)newfiles, (void*)pack->files);
+		}
+		
+		// Test random access to ensure the array is properly allocated
+		test_index = (pack->numfiles > 1) ? pack->numfiles - 1 : 0;
+		if (test_index < pack->numfiles) {
+			Con_Printf ("DEBUG: Last file: name='%s' pos=%d len=%d\n",
+				pack->files[test_index].name, pack->files[test_index].filepos, pack->files[test_index].filelen);
+		}
+	}
+	
+	if (!(pack->files && pack->numfiles > 0)) {
+		Con_Printf ("ERROR: pack->files is NULL or numfiles is 0!\n");
+	}
+	
 	Con_Printf ("Added packfile %s (%i files)\n", packfile, numpackfiles);
+	
+	// Free the temporary directory info
+	Z_Free(info);
+	
 	return pack;
 }
 
@@ -1718,7 +1892,7 @@ void COM_AddGameDirectory (char *dir)
 	if ((p = strrchr(dir, '/')) != NULL)
 		strcpy(gamedirfile, ++p);
 	else
-		strcpy(gamedirfile, p);
+		strcpy(gamedirfile, dir);
 	strcpy (com_gamedir, dir);
 
 //
@@ -1726,8 +1900,6 @@ void COM_AddGameDirectory (char *dir)
 //
 	search = Hunk_Alloc (sizeof(searchpath_t));
 	strcpy (search->filename, dir);
-    // DEBUG: Print search->filename immediately after strcpy
-    Sys_Printf("DEBUG: COM_AddGameDirectory: search->filename for dir [%s] is now [%s]\n", dir, search->filename);
 	search->next = com_searchpaths;
 	com_searchpaths = search;
 
@@ -1781,10 +1953,12 @@ void COM_Gamedir (char *dir)
 		if (com_searchpaths->pack)
 		{
 			fclose (com_searchpaths->pack->handle);
-			Z_Free (com_searchpaths->pack->files);
-			Z_Free (com_searchpaths->pack);
+			// Pack structures and files are now allocated with Hunk_Alloc
+			// so they don't need manual freeing - Cache_Flush() handles it
 		}
 		next = com_searchpaths->next;
+		// Only free searchpath_t structures that were allocated with Z_Malloc in COM_Gamedir
+		// Base searchpaths allocated with Hunk_Alloc are handled by Cache_Flush()
 		Z_Free (com_searchpaths);
 		com_searchpaths = next;
 	}
@@ -1802,7 +1976,7 @@ void COM_Gamedir (char *dir)
 	//
 	// add the directory to the search path
 	//
-	search = Z_Malloc (sizeof(searchpath_t));
+	search = Hunk_Alloc (sizeof(searchpath_t));
 	strcpy (search->filename, com_gamedir);
 	search->next = com_searchpaths;
 	com_searchpaths = search;
@@ -1816,7 +1990,7 @@ void COM_Gamedir (char *dir)
 		pak = COM_LoadPackFile (pakfile);
 		if (!pak)
 			break;
-		search = Z_Malloc (sizeof(searchpath_t));
+		search = Hunk_Alloc (sizeof(searchpath_t));
 		search->pack = pak;
 		search->next = com_searchpaths;
 		com_searchpaths = search;		
@@ -1830,33 +2004,24 @@ COM_InitFilesystem
 */
 void COM_InitFilesystem (void)
 {
-	int		i;
-
-//
-// -basedir <path>
-// Overrides the system supplied base directory (under id1)
-//
-	// DEBUG: Print host_parms.basedir
-    Sys_Printf("DEBUG: host_parms.basedir before strcpy: [%s]\n", host_parms.basedir ? host_parms.basedir : "NULL");
-
-	i = COM_CheckParm ("-basedir");
-	if (i && i < com_argc-1)
-		strcpy (com_basedir, com_argv[i+1]);
-	else
-		strcpy (com_basedir, host_parms.basedir);
-	
-	// DEBUG: Print com_basedir after strcpy
-    Sys_Printf("DEBUG: com_basedir after strcpy: [%s]\n", com_basedir);
+    char id1_path[MAX_OSPATH];
+    char qw_path[MAX_OSPATH];
+    int i = COM_CheckParm ("-basedir");
+    
+    if (i && i < com_argc-1)
+        strcpy (com_basedir, com_argv[i+1]);
+    else
+        strcpy (com_basedir, host_parms.basedir);
 
 //
 // start up with id1 by default
 //
-	COM_AddGameDirectory (va("%s/id1", com_basedir) );
-	//COM_AddGameDirectory (va("%s/qw", com_basedir) );
-	// DEBUG: Print result of va() for qw
-    char* temp_qw_path = va("%s/qw", com_basedir);
-    Sys_Printf("DEBUG: Path for qw from va(): [%s]\n", temp_qw_path ? temp_qw_path : "NULL");
-    COM_AddGameDirectory (temp_qw_path);
+    // Use local buffers to avoid va() static buffer reuse issues
+    sprintf(id1_path, "%s/id1", com_basedir);
+    sprintf(qw_path, "%s/qw", com_basedir);
+    
+	COM_AddGameDirectory(id1_path);
+	COM_AddGameDirectory(qw_path);
 
 	// any set gamedirs will be freed up to here
 	com_base_searchpaths = com_searchpaths;
@@ -2147,117 +2312,31 @@ void Info_Print (char *s)
 	}
 }
 
-static byte chktbl[1024 + 4] = {
-0x78,0xd2,0x94,0xe3,0x41,0xec,0xd6,0xd5,0xcb,0xfc,0xdb,0x8a,0x4b,0xcc,0x85,0x01,
-0x23,0xd2,0xe5,0xf2,0x29,0xa7,0x45,0x94,0x4a,0x62,0xe3,0xa5,0x6f,0x3f,0xe1,0x7a,
-0x64,0xed,0x5c,0x99,0x29,0x87,0xa8,0x78,0x59,0x0d,0xaa,0x0f,0x25,0x0a,0x5c,0x58,
-0xfb,0x00,0xa7,0xa8,0x8a,0x1d,0x86,0x80,0xc5,0x1f,0xd2,0x28,0x69,0x71,0x58,0xc3,
-0x51,0x90,0xe1,0xf8,0x6a,0xf3,0x8f,0xb0,0x68,0xdf,0x95,0x40,0x5c,0xe4,0x24,0x6b,
-0x29,0x19,0x71,0x3f,0x42,0x63,0x6c,0x48,0xe7,0xad,0xa8,0x4b,0x91,0x8f,0x42,0x36,
-0x34,0xe7,0x32,0x55,0x59,0x2d,0x36,0x38,0x38,0x59,0x9b,0x08,0x16,0x4d,0x8d,0xf8,
-0x0a,0xa4,0x52,0x01,0xbb,0x52,0xa9,0xfd,0x40,0x18,0x97,0x37,0xff,0xc9,0x82,0x27,
-0xb2,0x64,0x60,0xce,0x00,0xd9,0x04,0xf0,0x9e,0x99,0xbd,0xce,0x8f,0x90,0x4a,0xdd,
-0xe1,0xec,0x19,0x14,0xb1,0xfb,0xca,0x1e,0x98,0x0f,0xd4,0xcb,0x80,0xd6,0x05,0x63,
-0xfd,0xa0,0x74,0xa6,0x86,0xf6,0x19,0x98,0x76,0x27,0x68,0xf7,0xe9,0x09,0x9a,0xf2,
-0x2e,0x42,0xe1,0xbe,0x64,0x48,0x2a,0x74,0x30,0xbb,0x07,0xcc,0x1f,0xd4,0x91,0x9d,
-0xac,0x55,0x53,0x25,0xb9,0x64,0xf7,0x58,0x4c,0x34,0x16,0xbc,0xf6,0x12,0x2b,0x65,
-0x68,0x25,0x2e,0x29,0x1f,0xbb,0xb9,0xee,0x6d,0x0c,0x8e,0xbb,0xd2,0x5f,0x1d,0x8f,
-0xc1,0x39,0xf9,0x8d,0xc0,0x39,0x75,0xcf,0x25,0x17,0xbe,0x96,0xaf,0x98,0x9f,0x5f,
-0x65,0x15,0xc4,0x62,0xf8,0x55,0xfc,0xab,0x54,0xcf,0xdc,0x14,0x06,0xc8,0xfc,0x42,
-0xd3,0xf0,0xad,0x10,0x08,0xcd,0xd4,0x11,0xbb,0xca,0x67,0xc6,0x48,0x5f,0x9d,0x59,
-0xe3,0xe8,0x53,0x67,0x27,0x2d,0x34,0x9e,0x9e,0x24,0x29,0xdb,0x69,0x99,0x86,0xf9,
-0x20,0xb5,0xbb,0x5b,0xb0,0xf9,0xc3,0x67,0xad,0x1c,0x9c,0xf7,0xcc,0xef,0xce,0x69,
-0xe0,0x26,0x8f,0x79,0xbd,0xca,0x10,0x17,0xda,0xa9,0x88,0x57,0x9b,0x15,0x24,0xba,
-0x84,0xd0,0xeb,0x4d,0x14,0xf5,0xfc,0xe6,0x51,0x6c,0x6f,0x64,0x6b,0x73,0xec,0x85,
-0xf1,0x6f,0xe1,0x67,0x25,0x10,0x77,0x32,0x9e,0x85,0x6e,0x69,0xb1,0x83,0x00,0xe4,
-0x13,0xa4,0x45,0x34,0x3b,0x40,0xff,0x41,0x82,0x89,0x79,0x57,0xfd,0xd2,0x8e,0xe8,
-0xfc,0x1d,0x19,0x21,0x12,0x00,0xd7,0x66,0xe5,0xc7,0x10,0x1d,0xcb,0x75,0xe8,0xfa,
-0xb6,0xee,0x7b,0x2f,0x1a,0x25,0x24,0xb9,0x9f,0x1d,0x78,0xfb,0x84,0xd0,0x17,0x05,
-0x71,0xb3,0xc8,0x18,0xff,0x62,0xee,0xed,0x53,0xab,0x78,0xd3,0x65,0x2d,0xbb,0xc7,
-0xc1,0xe7,0x70,0xa2,0x43,0x2c,0x7c,0xc7,0x16,0x04,0xd2,0x45,0xd5,0x6b,0x6c,0x7a,
-0x5e,0xa1,0x50,0x2e,0x31,0x5b,0xcc,0xe8,0x65,0x8b,0x16,0x85,0xbf,0x82,0x83,0xfb,
-0xde,0x9f,0x36,0x48,0x32,0x79,0xd6,0x9b,0xfb,0x52,0x45,0xbf,0x43,0xf7,0x0b,0x0b,
-0x19,0x19,0x31,0xc3,0x85,0xec,0x1d,0x8c,0x20,0xf0,0x3a,0xfa,0x80,0x4d,0x2c,0x7d,
-0xac,0x60,0x09,0xc0,0x40,0xee,0xb9,0xeb,0x13,0x5b,0xe8,0x2b,0xb1,0x20,0xf0,0xce,
-0x4c,0xbd,0xc6,0x04,0x86,0x70,0xc6,0x33,0xc3,0x15,0x0f,0x65,0x19,0xfd,0xc2,0xd3,
-
-// map checksum goes here
-0x00,0x00,0x00,0x00
-};
-
-static byte chkbuf[16 + 60 + 4];
-
-static unsigned last_mapchecksum = 0;
-
-#if 0
 /*
-====================
-COM_BlockSequenceCheckByte
-
-For proxy protecting
-====================
-*/
-byte	COM_BlockSequenceCheckByte (byte *base, int length, int sequence, unsigned mapchecksum)
-{
-	int		checksum;
-	byte	*p;
-
-	if (last_mapchecksum != mapchecksum) {
-		last_mapchecksum = mapchecksum;
-		chktbl[1024] = (mapchecksum & 0xff000000) >> 24;
-		chktbl[1025] = (mapchecksum & 0x00ff0000) >> 16;
-		chktbl[1026] = (mapchecksum & 0x0000ff00) >> 8;
-		chktbl[1027] = (mapchecksum & 0x000000ff);
-
-		Com_BlockFullChecksum (chktbl, sizeof(chktbl), chkbuf);
-	}
-
-	p = chktbl + (sequence % (sizeof(chktbl) - 8));
-
-	if (length > 60)
-		length = 60;
-	memcpy (chkbuf + 16, base, length);
-
-	length += 16;
-
-	chkbuf[length] = (sequence & 0xff) ^ p[0];
-	chkbuf[length+1] = p[1];
-	chkbuf[length+2] = ((sequence>>8) & 0xff) ^ p[2];
-	chkbuf[length+3] = p[3];
-
-	length += 4;
-
-	checksum = LittleLong(Com_BlockChecksum (chkbuf, length));
-
-	checksum &= 0xff;
-
-	return checksum;
-}
-#endif
-
-/*
-====================
+================
 COM_BlockSequenceCRCByte
 
 For proxy protecting
-====================
+================
 */
-byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
+byte COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 {
 	unsigned short crc;
-	byte	*p;
+	byte *p;
 	byte chkb[60 + 4];
 
-	p = chktbl + (sequence % (sizeof(chktbl) - 8));
+	if (sequence < 0)
+		Sys_Error("sequence < 0, this shouldn't happen\n");
+
+	p = chkb;
+	*p++ = (sequence      ) & 0xff;
+	*p++ = (sequence >>  8) & 0xff;
+	*p++ = (sequence >> 16) & 0xff;
+	*p++ = (sequence >> 24) & 0xff;
 
 	if (length > 60)
 		length = 60;
-	memcpy (chkb, base, length);
-
-	chkb[length] = (sequence & 0xff) ^ p[0];
-	chkb[length+1] = p[1];
-	chkb[length+2] = ((sequence>>8) & 0xff) ^ p[2];
-	chkb[length+3] = p[3];
+	memcpy(p, base, length);
 
 	length += 4;
 
@@ -2268,44 +2347,15 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 	return crc;
 }
 
-// char *date = "Oct 24 1996";
-static char *date = __DATE__ ;
-static char *mon[12] = 
-{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-static char mond[12] = 
-{ 31,    28,    31,    30,    31,    30,    31,    31,    30,    31,    30,    31 };
+/*
+================
+build_number
 
-// returns days since Oct 24 1996
-int build_number( void )
+Returns the build number
+================
+*/
+int build_number(void)
 {
-	int m = 0; 
-	int d = 0;
-	int y = 0;
-	static int b = 0;
-
-	if (b != 0)
-		return b;
-
-	for (m = 0; m < 11; m++)
-	{
-		if (Q_strncasecmp( &date[0], mon[m], 3 ) == 0)
-			break;
-		d += mond[m];
-	}
-
-	d += atoi( &date[4] ) - 1;
-
-	y = atoi( &date[7] ) - 1900;
-
-	b = d + (int)((y - 1) * 365.25);
-
-	if (((y % 4) == 0) && m > 1)
-	{
-		b += 1;
-	}
-
-	b -= 35778; // Dec 16 1998
-
-	return b;
+	return 1000;  /* Simple build number for IRIX port */
 }
 

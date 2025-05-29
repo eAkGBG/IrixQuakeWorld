@@ -69,3 +69,15 @@ void Sys_LowFPPrecision (void);
 void Sys_HighFPPrecision (void);
 void Sys_SetFPCW (void);
 
+// Externa deklarationer för globala variabler definierade i sys_*.c filer,
+// om de behövs globalt. Använd med försiktighet.
+
+extern int noconinput; // Om någon annan modul än sys_irix.c behöver denna.
+extern int nostdout;   // Om någon annan modul än sys_irix.c behöver denna (int-varianten).
+                         // Notera att det redan finns en 'extern cvar_t sys_nostdout;' i quakedef.h
+
+// För basedir och cachedir, använd host_parms.basedir och host_parms.cachedir
+// efter att Host_Init() har körts.
+extern char *basedir;
+extern char *cachedir;
+

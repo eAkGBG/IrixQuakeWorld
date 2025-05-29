@@ -69,10 +69,10 @@ Writes the current user cmd
 */
 void CL_WriteDemoCmd (usercmd_t *pcmd)
 {
-	int		i;
-	float	fl;
-	byte	c;
-	usercmd_t cmd;
+    int i;
+    float fl;
+    byte c;
+    usercmd_t cmd;
 
 //Con_Printf("write: %ld bytes, %4.4f\n", msg->cursize, realtime);
 
@@ -142,11 +142,11 @@ CL_GetDemoMessage
 */
 qboolean CL_GetDemoMessage (void)
 {
-	int		r, i, j;
-	float	f;
-	float	demotime;
-	byte	c;
-	usercmd_t *pcmd;
+    int r, i, j;
+    float f;
+    float demotime;
+    byte c;
+    usercmd_t *pcmd;
 
 	// read the time from the packet
 	fread(&demotime, sizeof(demotime), 1, cls.demofile);
@@ -375,17 +375,17 @@ record <demoname> <server>
 */
 void CL_Record_f (void)
 {
-	int		c;
-	char	name[MAX_OSPATH];
-	sizebuf_t	buf;
-	char	buf_data[MAX_MSGLEN];
-	int n, i, j;
-	char *s;
-	entity_t *ent;
-	entity_state_t *es, blankes;
-	player_info_t *player;
-	extern	char gamedirfile[];
-	int seq = 1;
+    int c;
+    char name[MAX_OSPATH];
+    sizebuf_t buf;
+    char buf_data[MAX_MSGLEN];
+    int n, i, j;
+    char *s;
+    entity_t *ent;
+    entity_state_t *es, blankes;
+    player_info_t *player;
+    extern char gamedirfile[];
+    int seq = 1;
 
 	c = Cmd_Argc();
 	if (c != 2)
@@ -670,8 +670,8 @@ record <demoname>
 */
 void CL_ReRecord_f (void)
 {
-	int		c;
-	char	name[MAX_OSPATH];
+    int c;
+    char name[MAX_OSPATH];
 
 	c = Cmd_Argc();
 	if (c != 2)

@@ -1095,6 +1095,8 @@ void R_DrawBrushModel (entity_t *e)
 	mplane_t	*pplane;
 	model_t		*clmodel;
 	qboolean	rotated;
+	vec3_t		temp;
+	vec3_t		forward, right, up;
 
 	currententity = e;
 	currenttexture = -1;
@@ -1126,9 +1128,6 @@ void R_DrawBrushModel (entity_t *e)
 	VectorSubtract (r_refdef.vieworg, e->origin, modelorg);
 	if (rotated)
 	{
-		vec3_t	temp;
-		vec3_t	forward, right, up;
-
 		VectorCopy (modelorg, temp);
 		AngleVectors (e->angles, forward, right, up);
 		modelorg[0] = DotProduct (temp, forward);
@@ -1471,6 +1470,9 @@ void BuildSurfaceDisplayList (msurface_t *fa)
 	float		*vec;
 	float		s, t;
 	glpoly_t	*poly;
+	vec3_t		v1, v2;
+	float		*prev, *this, *next;
+	int			j, k;
 
 // reconstruct the polygon
 	pedges = currentmodel->edges;
@@ -1536,9 +1538,6 @@ void BuildSurfaceDisplayList (msurface_t *fa)
 	{
 		for (i = 0 ; i < lnumverts ; ++i)
 		{
-			vec3_t v1, v2;
-			float *prev, *this, *next;
-
 			prev = poly->verts[(i + lnumverts - 1) % lnumverts];
 			this = poly->verts[i];
 			next = poly->verts[(i + 1) % lnumverts];
@@ -1554,10 +1553,8 @@ void BuildSurfaceDisplayList (msurface_t *fa)
 				(fabs( v1[1] - v2[1] ) <= COLINEAR_EPSILON) && 
 				(fabs( v1[2] - v2[2] ) <= COLINEAR_EPSILON))
 			{
-				int j;
 				for (j = i + 1; j < lnumverts; ++j)
 				{
-					int k;
 					for (k = 0; k < VERTEXSIZE; ++k)
 						poly->verts[j - 1][k] = poly->verts[j][k];
 				}
@@ -1619,15 +1616,15 @@ void GL_BuildLightmaps (void)
 	}
 
 	gl_lightmap_format = GL_LUMINANCE;
-	if (COM_CheckParm ("-lm_1"))
+	if (COM_CheckParm ("-lm_1") != 0)
 		gl_lightmap_format = GL_LUMINANCE;
-	if (COM_CheckParm ("-lm_a"))
+	if (COM_CheckParm ("-lm_a") != 0)
 		gl_lightmap_format = GL_ALPHA;
-	if (COM_CheckParm ("-lm_i"))
+	if (COM_CheckParm ("-lm_i") != 0)
 		gl_lightmap_format = GL_INTENSITY;
-	if (COM_CheckParm ("-lm_2"))
+	if (COM_CheckParm ("-lm_2") != 0)
 		gl_lightmap_format = GL_RGBA4;
-	if (COM_CheckParm ("-lm_4"))
+	if (COM_CheckParm ("-lm_4") != 0)
 		gl_lightmap_format = GL_RGBA;
 
 	switch (gl_lightmap_format)
