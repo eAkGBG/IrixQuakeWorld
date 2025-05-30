@@ -38,3 +38,15 @@ core.*
 irix_changes_filtered.diff
 gl_h_from_irix.txt
 glx_h_from_irix.txt
+
+# Debug/dokumentations MD-filer från utvecklingsprocessen
+*.md
+BUFFER_OVERRUN_FIX.md
+COMPREHENSIVE_MEMORY_CORRUPTION_FIXES.md
+EMERGENCY_LOOP_PROTECTION.md
+FINAL_MEMORY_CORRUPTION_FIXES.md
+INFINITE_LOOP_ANALYSIS.md
+INFINITE_LOOP_FIX.md
+MEMORY_CORRUPTION_FINAL_FIX.md
+MEMORY_CORRUPTION_FIXES.md
+SYNTAX_ERROR_FIX.md
